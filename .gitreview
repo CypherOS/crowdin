@@ -1,5 +1,5 @@
 [gerrit]
-host=review.lineageos.org
+host=gerrit.cypheros.co
 port=29418
-project=LineageOS/cm_crowdin
+project=CypherOS/crowdin
 defaultbranch=master

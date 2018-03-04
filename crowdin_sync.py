@@ -3,7 +3,7 @@
 # crowdin_sync.py
 #
 # Updates Crowdin source translations and pushes translations
-# directly to LineageOS' Gerrit.
+# directly to CypherOS' Gerrit.
 #
 # Copyright (C) 2014-2015 The CyanogenMod Project
 #
@@ -54,10 +54,7 @@ def run_subprocess(cmd, silent=False):
     return comm, exit_code
 
 
-def push_as_commit(base_path, path, name, branch, username, ticket):
-    if 'stable/' in base_path:
-        branch = ''.join(('stable/', branch))
-
+def push_as_commit(base_path, path, name, branch, username):
     print('Committing %s on branch %s' % (name, branch))
 
     # Get path
@@ -77,15 +74,8 @@ def push_as_commit(base_path, path, name, branch, username, ticket):
     repo.git.add('-A')
 
     # Create commit; if it fails, probably empty so skipping
-    if ticket:
-        message = '''Automatic translation import
-
-Ticket: %s''' % ticket
-    else:
-        message = 'Automatic translation import'
-
     try:
-        repo.git.commit(m=message)
+        repo.git.commit(m='Automatic translation import')
     except:
         print('Failed to create commit for %s, probably empty: skipping'
               % name, file=sys.stderr)
@@ -93,7 +83,7 @@ Ticket: %s''' % ticket
 
     # Push commit
     try:
-        repo.git.push('ssh://%s@review.lineageos.org:29418/%s' % (username, name),
+        repo.git.push('ssh://%s@gerrit.cypheros.co:29418/%s' % (username, name),
                       'HEAD:refs/for/%s%%topic=translation' % branch)
         print('Successfully pushed commit for %s' % name)
     except:
@@ -121,12 +111,11 @@ def find_xml(base_path):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Synchronising LineageOS' translations with Crowdin")
+        description="Synchronising CypherOS' translations with Crowdin")
     parser.add_argument('-u', '--username', help='Gerrit username')
-    parser.add_argument('-b', '--branch', help='LineageOS branch',
+    parser.add_argument('-b', '--branch', help='CypherOS branch',
                         required=True)
     parser.add_argument('-c', '--config', help='Custom yaml config')
-    parser.add_argument('-t', '--ticket', help='JIRA ticket')
     parser.add_argument('--upload-sources', action='store_true',
                         help='Upload sources to Crowdin')
     parser.add_argument('--upload-translations', action='store_true',
@@ -176,14 +165,9 @@ def upload_sources_crowdin(branch, config):
                    '--config=%s/config/%s' % (_DIR, config),
                    'upload', 'sources', '--branch=%s' % branch])
     else:
-        print('\nUploading sources to Crowdin (AOSP supported languages)')
+        print('\nUploading sources to Crowdin')
         check_run(['crowdin-cli',
                    '--config=%s/config/%s.yaml' % (_DIR, branch),
-                   'upload', 'sources', '--branch=%s' % branch])
-
-        print('\nUploading sources to Crowdin (non-AOSP supported languages)')
-        check_run(['crowdin-cli',
-                   '--config=%s/config/%s_aosp.yaml' % (_DIR, branch),
                    'upload', 'sources', '--branch=%s' % branch])
 
 
@@ -196,40 +180,24 @@ def upload_translations_crowdin(branch, config):
                    '--no-import-duplicates', '--import-eq-suggestions',
                    '--auto-approve-imported'])
     else:
-        print('\nUploading translations to Crowdin '
-              '(AOSP supported languages)')
+        print('\nUploading translations to Crowdin')
         check_run(['crowdin-cli',
                    '--config=%s/config/%s.yaml' % (_DIR, branch),
                    'upload', 'translations', '--branch=%s' % branch,
                    '--no-import-duplicates', '--import-eq-suggestions',
                    '--auto-approve-imported'])
 
-        print('\nUploading translations to Crowdin '
-              '(non-AOSP supported languages)')
-        check_run(['crowdin-cli',
-                   '--config=%s/config/%s_aosp.yaml' % (_DIR, branch),
-                   'upload', 'translations', '--branch=%s' % branch,
-                   '--no-import-duplicates', '--import-eq-suggestions',
-                   '--auto-approve-imported'])
 
-
-def download_crowdin(base_path, branch, xml, username, config, ticket):
+def download_crowdin(base_path, branch, xml, username, config):
     if config:
         print('\nDownloading translations from Crowdin (custom config)')
         check_run(['crowdin-cli',
                    '--config=%s/config/%s' % (_DIR, config),
                    'download', '--branch=%s' % branch])
     else:
-        print('\nDownloading translations from Crowdin '
-              '(AOSP supported languages)')
+        print('\nDownloading translations from Crowdin')
         check_run(['crowdin-cli',
                    '--config=%s/config/%s.yaml' % (_DIR, branch),
-                   'download', '--branch=%s' % branch])
-
-        print('\nDownloading translations from Crowdin '
-              '(non-AOSP supported languages)')
-        check_run(['crowdin-cli',
-                   '--config=%s/config/%s_aosp.yaml' % (_DIR, branch),
                    'download', '--branch=%s' % branch])
 
     print('\nRemoving useless empty translation files')
@@ -259,8 +227,7 @@ def download_crowdin(base_path, branch, xml, username, config, ticket):
     if config:
         files = ['%s/config/%s' % (_DIR, config)]
     else:
-        files = ['%s/config/%s.yaml' % (_DIR, branch),
-                 '%s/config/%s_aosp.yaml' % (_DIR, branch)]
+        files = ['%s/config/%s.yaml' % (_DIR, branch)]
     for c in files:
         cmd = ['crowdin-cli', '--config=%s' % c, 'list', 'project',
                '--branch=%s' % branch]
@@ -271,7 +238,8 @@ def download_crowdin(base_path, branch, xml, username, config, ticket):
             paths.append(p.replace('/%s' % branch, ''))
 
     print('\nUploading translations to Gerrit')
-    items = [x for sub in xml for x in sub.getElementsByTagName('project')]
+    xml_android = load_xml(x='%s/config/%s.xml' % (_DIR, branch))
+    items = xml_android.getElementsByTagName('project')
     all_projects = []
 
     for path in paths:
@@ -313,7 +281,7 @@ def download_crowdin(base_path, branch, xml, username, config, ticket):
             br = project.getAttribute('revision') or branch
 
             push_as_commit(base_path, result,
-                           project.getAttribute('name'), br, username, ticket)
+                           project.getAttribute('name'), br, username)
             break
 
 
@@ -321,13 +289,9 @@ def main():
     args = parse_args()
     default_branch = args.branch
 
-    if 'stable/' in default_branch:
-        base_path_env = 'CM_CROWDIN_STABLE_BASE_PATH'
-        base_path = os.getenv(base_path_env)
-        default_branch = default_branch.replace('stable/', '')
-    else:
-        base_path_env = 'CM_CROWDIN_BASE_PATH'
-        base_path = os.getenv(base_path_env)
+    base_path_env = 'AOSCP_CROWDIN_BASE_PATH'
+    base_path = os.getenv(base_path_env)
+
     if base_path is None:
         cwd = os.getcwd()
         print('You have not set %s. Defaulting to %s' % (base_path_env, cwd))
@@ -342,30 +306,12 @@ def main():
     if not check_dependencies():
         sys.exit(1)
 
-    xml_android = load_xml(x='%s/android/default.xml' % base_path)
-    if xml_android is None:
-        sys.exit(1)
-
-    xml_extra = load_xml(x='%s/config/%s_extra_packages.xml'
-                           % (_DIR, default_branch))
-    if xml_extra is None:
-        sys.exit(1)
-
-    xml_snippet = load_xml(x='%s/android/snippets/lineage.xml' % base_path)
-    if xml_snippet is None:
-        xml_snippet = load_xml(x='%s/android/snippets/cm.xml' % base_path)
-    if xml_snippet is None:
-        xml_snippet = load_xml(x='%s/android/snippets/hal_cm_all.xml' % base_path)
-    if xml_snippet is not None:
-        xml_files = (xml_android, xml_snippet, xml_extra)
-    else:
-        xml_files = (xml_android, xml_extra)
+    xml_files = load_xml(x='%s/config/%s.xml' % (_DIR, default_branch))
 
     if args.config:
         files = ['%s/config/%s' % (_DIR, args.config)]
     else:
-        files = ['%s/config/%s.yaml' % (_DIR, default_branch),
-                 '%s/config/%s_aosp.yaml' % (_DIR, default_branch)]
+        files = ['%s/config/%s.yaml' % (_DIR, default_branch)]
     if not check_files(files):
         sys.exit(1)
 
@@ -379,7 +325,7 @@ def main():
         upload_translations_crowdin(default_branch, args.config)
     if args.download:
         download_crowdin(base_path, default_branch, xml_files,
-                         args.username, args.config, args.ticket)
+                         args.username, args.config)
 
     if _COMMITS_CREATED:
         print('\nDone!')
