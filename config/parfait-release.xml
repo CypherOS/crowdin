@@ -15,5 +15,5 @@
   <project path="packages/apps/GalleryX" name="packages_apps_GalleryX" groups="pdk-fs" remote="aoscp" />
   <project path="packages/apps/Messaging" name="packages_apps_Messaging" groups="pdk-fs" remote="aoscp" />
   <project path="packages/apps/Settings" name="packages_apps_Settings" groups="pdk-fs" remote="aoscp" />
-
+  <project path="packages/apps/COTA" name="packages_apps_COTA" groups="pdk-fs" remote="aoscp" />
 </manifest>
